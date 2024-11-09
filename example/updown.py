@@ -13,6 +13,9 @@ import six
 import sys
 import time
 import unicodedata
+import io
+import random
+import string
 
 if sys.version.startswith('2'):
     input = raw_input  # noqa: E501,F821; pylint: disable=redefined-builtin,undefined-variable,useless-suppression
@@ -39,6 +42,14 @@ parser.add_argument('--default', '-d', action='store_true',
 # Add the new argument for team member ID
 parser.add_argument('--team-member-id', default=None,
                     help='Team member ID for Dropbox Business account (required for team access tokens)')
+parser.add_argument('--depth', type=int, default=2,
+                    help='Depth of the folder hierarchy')
+parser.add_argument('--subfolders', type=int, default=3,
+                    help='Number of subfolders at each level')
+parser.add_argument('--files', type=int, default=3,
+                    help='Number of files in each folder')
+parser.add_argument('--file-size', type=int, default=1024,
+                    help='Size of each generated file in bytes')
 
 def main():
     """Main program.
@@ -76,7 +87,10 @@ def main():
     dbx = dropbox.Dropbox(args.token, headers={"Dropbox-API-Select-User": args.team_member_id})
     
     # Upload local folder onto Dropbox
-    upload_from_local_folder(dbx, rootdir, folder, args)
+    # upload_from_local_folder(dbx, rootdir, folder, args)
+
+    # Generate folder structure and upload it
+    generate_and_upload_structure(dbx, args.folder, args.depth, args.subfolders, args.files, args.file_size)
 
     dbx.close()
 
@@ -137,7 +151,52 @@ def upload_from_local_folder(dbx, rootdir, folder, args):
                 print('OK, skipping directory:', name)
         dirs[:] = keep
 
-    dbx.close()
+def generate_and_upload_structure(dbx, root_folder, depth, subfolder_count, file_count, file_size):
+    """Generate folder and file structure in memory and upload to Dropbox."""
+    def random_string(length=10):
+        return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+
+    def upload_file(dbx, folder_path, file_name, file_size):
+        """Upload a generated file to Dropbox."""
+        content = io.BytesIO(random_string(file_size).encode('utf-8'))
+        path = f'/{folder_path}/{file_name}'
+        with stopwatch(f'upload {file_name} to {folder_path}'):
+            try:
+                dbx.files_upload(content.read(), path, mode=dropbox.files.WriteMode.overwrite)
+                print(f"Uploaded file: {path}")
+            except dropbox.exceptions.ApiError as err:
+                print(f"Failed to upload {file_name} to {folder_path}: {err}")
+
+    def create_folder(dbx, folder_path):
+        """Create a folder in Dropbox."""
+        path = f'/{folder_path}'
+        try:
+            dbx.files_create_folder_v2(path)
+            print(f"Created folder: {path}")
+        except dropbox.exceptions.ApiError as err:
+            if err.error.is_path() and err.error.get_path().is_conflict():
+                print(f"Folder already exists: {path}")
+            else:
+                print(f"Failed to create folder {path}: {err}")
+
+    def generate_structure(dbx, current_path, current_depth):
+        """Recursively generate folders and files, uploading them to Dropbox."""
+        if current_depth > depth:
+            return
+        create_folder(dbx, current_path)
+        
+        # Create files
+        for _ in range(file_count):
+            file_name = f"{random_string(8)}.txt"
+            upload_file(dbx, current_path, file_name, file_size)
+        
+        # Create subfolders and recursively generate their structure
+        for _ in range(subfolder_count):
+            subfolder_name = f"{random_string(8)}"
+            generate_structure(dbx, f"{current_path}/{subfolder_name}", current_depth + 1)
+
+    # Start generating and uploading from the root folder
+    generate_structure(dbx, root_folder, 1)
 
 def list_folder(dbx, folder, subfolder):
     """List a folder.
