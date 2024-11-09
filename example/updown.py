@@ -71,6 +71,19 @@ def main():
     if args.team_member_id is None:
         print('--team-member-id is required for team access tokens')
         sys.exit(2)
+    
+    # Initialize Dropbox with team member ID
+    dbx = dropbox.Dropbox(args.token, headers={"Dropbox-API-Select-User": args.team_member_id})
+    
+    # Upload local folder onto Dropbox
+    # upload_from_local_folder(dbx, args)
+
+    # Generate folder structure and upload it
+    generate_and_upload_structure(dbx, args.folder, args.depth, args.subfolders, args.files, args.file_size)
+
+    dbx.close()
+
+def upload_from_local_folder(dbx, args):
 
     folder = args.folder
     rootdir = os.path.expanduser(args.rootdir)
@@ -82,19 +95,7 @@ def main():
     elif not os.path.isdir(rootdir):
         print(rootdir, 'is not a folder on your filesystem')
         sys.exit(1)
-    
-    # Initialize Dropbox with team member ID
-    dbx = dropbox.Dropbox(args.token, headers={"Dropbox-API-Select-User": args.team_member_id})
-    
-    # Upload local folder onto Dropbox
-    # upload_from_local_folder(dbx, rootdir, folder, args)
 
-    # Generate folder structure and upload it
-    generate_and_upload_structure(dbx, args.folder, args.depth, args.subfolders, args.files, args.file_size)
-
-    dbx.close()
-
-def upload_from_local_folder(dbx, rootdir, folder, args):
     for dn, dirs, files in os.walk(rootdir):
         subfolder = dn[len(rootdir):].strip(os.path.sep)
         listing = list_folder(dbx, folder, subfolder)
