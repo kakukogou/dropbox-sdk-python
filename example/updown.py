@@ -75,7 +75,12 @@ def main():
     # Initialize Dropbox with team member ID
     dbx = dropbox.Dropbox(args.token, headers={"Dropbox-API-Select-User": args.team_member_id})
     
+    # Upload local folder onto Dropbox
+    upload_from_local_folder(dbx, rootdir, folder, args)
 
+    dbx.close()
+
+def upload_from_local_folder(dbx, rootdir, folder, args):
     for dn, dirs, files in os.walk(rootdir):
         subfolder = dn[len(rootdir):].strip(os.path.sep)
         listing = list_folder(dbx, folder, subfolder)
