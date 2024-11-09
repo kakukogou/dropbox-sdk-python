@@ -36,6 +36,9 @@ parser.add_argument('--no', '-n', action='store_true',
                     help='Answer no to all questions')
 parser.add_argument('--default', '-d', action='store_true',
                     help='Take default answer on all questions')
+# Add the new argument for team member ID
+parser.add_argument('--team-member-id', default=None,
+                    help='Team member ID for Dropbox Business account (required for team access tokens)')
 
 def main():
     """Main program.
@@ -46,11 +49,16 @@ def main():
     mtime with the server.
     """
     args = parser.parse_args()
+    
+    # Check for required arguments
     if sum([bool(b) for b in (args.yes, args.no, args.default)]) > 1:
         print('At most one of --yes, --no, --default is allowed')
         sys.exit(2)
     if not args.token:
         print('--token is mandatory')
+        sys.exit(2)
+    if args.team_member_id is None:
+        print('--team-member-id is required for team access tokens')
         sys.exit(2)
 
     folder = args.folder
@@ -63,8 +71,10 @@ def main():
     elif not os.path.isdir(rootdir):
         print(rootdir, 'is not a folder on your filesystem')
         sys.exit(1)
-
-    dbx = dropbox.Dropbox(args.token)
+    
+    # Initialize Dropbox with team member ID
+    dbx = dropbox.Dropbox(args.token, headers={"Dropbox-API-Select-User": args.team_member_id})
+    
 
     for dn, dirs, files in os.walk(rootdir):
         subfolder = dn[len(rootdir):].strip(os.path.sep)
